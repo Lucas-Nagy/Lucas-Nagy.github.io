@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABI Merchant Sound Matcher (Precision Engine)</title>
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --card: #151a23;
+      --border: #28303e;
+      --primary: #f59e0b;
+      --primary-hover: #d97706;
+      --accent: #10b981;
+      --text: #f3f4f6;
+      --text-muted: #8c96a5;
+      --danger: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1050px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    h1 { font-size: 1.3rem; color: var(--primary); }
+    .badge { background: #1f2735; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; color: var(--text-muted); border: 1px solid var(--border); }
+    .badge.active { color: var(--accent); border-color: var(--accent); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    button {
+      background: var(--primary);
+      color: #000;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.82rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button:hover { background: var(--primary-hover); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    button.stop { background: var(--danger); color: #fff; }
+    button.secondary { background: #222b3b; color: var(--text); border: 1px solid var(--border); }
+    button.secondary:hover { background: #2c374b; }
+
+    .control-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .match-banner {
+      background: #0f1520;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .match-banner.active {
+      border-color: var(--accent);
+      background: rgba(16, 185, 129, 0.12);
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
+    }
+
+    .match-id {
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: var(--primary);
+      margin: 4px 0;
+      font-family: ui-monospace, monospace;
+    }
+
+    .live-ranking {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      background: #06080c;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+    }
+
+    .rank-row { display: flex; justify-content: space-between; }
+    .rank-row span.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+    .rank-row span.score { color: var(--primary); font-weight: bold; }
+    .rank-row.top-1 { color: #fff; }
+    .rank-row.top-1 span.score { color: var(--accent); font-size: 0.9rem; }
+
+    .sample-list {
+      max-height: 400px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .sample-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #10151f;
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+    }
+
+    .sample-item .id {
+      font-family: ui-monospace, monospace;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 230px;
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      height: 6px;
+      background: #1f2735;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar { height: 100%; width: 0%; background: var(--primary); transition: width 0.1s linear; }
+
+    .meter-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .meter-bar-outer { flex: 1; height: 6px; background: #1f2735; border-radius: 3px; overflow: hidden; }
+    .meter-bar-inner { height: 100%; width: 0%; background: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>ABI Merchant Audio Matcher</h1>
+      <p style="font-size: 0.8rem; color: var(--text-muted);">Precision Mel-Spectrogram Cross-Correlation Engine</p>
+    </div>
+    <span class="badge" id="engineStatus">INITIALIZING</span>
+  </header>
+
+  <div class="grid">
+    <!-- Live Detection Column -->
+    <div class="card">
+      <div class="card-title">Live Recognition</div>
+
+      <div class="control-row">
+        <button id="startSystemBtn">Capture Desktop Audio</button>
+        <button id="startMicBtn" class="secondary">Microphone</button>
+        <button id="stopBtn" class="stop" disabled>Stop</button>
+      </div>
+
+      <div class="meter-wrap">
+        <span>Input Signal:</span>
+        <div class="meter-bar-outer">
+          <div class="meter-bar-inner" id="inputMeter"></div>
+        </div>
+      </div>
+
+      <div class="match-banner" id="matchBanner">
+        <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted)">Matched Sound ID</div>
+        <div class="match-id" id="matchedId">-- NONE --</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);" id="matchedDetails">Awaiting audio input...</div>
+      </div>
+
+      <div class="card-title" style="margin-top: 4px;">Live Top 4 Candidates</div>
+      <div class="live-ranking" id="liveRanking">
+        <div class="rank-row"><span>#1 Awaiting audio...</span><span class="score">0.0%</span></div>
+        <div class="rank-row"><span>#2 -</span><span class="score">0.0%</span></div>
+        <div class="rank-row"><span>#3 -</span><span class="score">0.0%</span></div>
+        <div class="rank-row"><span>#4 -</span><span class="score">0.0%</span></div>
+      </div>
+    </div>
+
+    <!-- Sound Bank Column -->
+    <div class="card">
+      <div class="card-title">
+        <span>39 Sound References</span>
+        <span class="badge" id="sampleCount">0 / 39 Loaded</span>
+      </div>
+
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="loadProgress"></div>
+      </div>
+
+      <input type="text" id="searchBox" placeholder="Search sounds..." style="background:#10151f; border:1px solid var(--border); color:#fff; padding:6px 10px; border-radius:4px; font-size:0.75rem;">
+
+      <div class="sample-list" id="sampleList"></div>
+
+      <div style="font-size: 0.75rem; color: var(--text-muted); display:flex; align-items:center; justify-content:space-between;">
+        <span>Trigger Threshold: <strong id="threshVal" style="color:var(--text);">0.80</strong></span>
+        <input type="range" id="threshRange" min="50" max="95" value="80" style="width: 140px;">
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SOUND_URLS = [
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Radio_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Big_Paper_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Statue_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Small_Paper_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Paper_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_GoldChain_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Teapot_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Clock_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Glass_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Coin_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Statue_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Food_Bag_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Glass_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Wood_Clock_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Small_Glass_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Small_Fabric_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Small_Metal_Crisp_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Small_Wood_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Big_Blunt_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Container_Small_Metal_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Small_Metal_Blunt_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Metal_Blunt_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Acc_Med_Comp_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Battery_Small_UP_01.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Big_Wood_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_PC_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Tech_Small_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Plastic_Small_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_ElectronicDevice_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Small_Comp_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Wood_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Plastic_Large_UP_01.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Metal_Crisp_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Concrete_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Prop_Acc_Fuel_UP.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Fabric_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Container_Big_Metal_Up.ogg",
+  "https://abibuilder.com/audio/merchant/Item_Misc_Med_Comp_Up.ogg"
+];
+
+// --- High Precision DSP Configuration ---
+const TARGET_SR = 16000;       // Resample all audio to 16kHz
+const FFT_SIZE = 512;          // 32ms window
+const HOP_SIZE = 160;          // 10ms frame step (100 fps resolution)
+const NUM_MEL_BINS = 24;       // 24 triangular Mel filters
+const LIVE_BUFFER_FRAMES = 80; // Holds ~800ms of rolling audio
+
+let audioCtx = null;
+let mediaStream = null;
+let processorNode = null;
+let isListening = false;
+let fingerprintDB = [];
+let lastMatchTime = 0;
+const MATCH_COOLDOWN_MS = 1000;
+
+// Rolling frame storage and incoming sample accumulator
+let rollingMelFrames = [];
+let pcmResampleAccumulator = [];
+
+// Precompute Hann Window
+const hann = new Float32Array(FFT_SIZE);
+for (let i = 0; i < FFT_SIZE; i++) {
+  hann[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (FFT_SIZE - 1)));
+}
+
+// Precompute 24 Triangular Mel Filterbank matrices
+const melFilters = createMelFilterbank(NUM_MEL_BINS, FFT_SIZE, TARGET_SR, 100, 7500);
+
+function hzToMel(hz) { return 2595 * Math.log10(1 + hz / 700); }
+function melToHz(mel) { return 700 * (Math.pow(10, mel / 2595) - 1); }
+
+function createMelFilterbank(numFilters, fftSize, sampleRate, lowHz, highHz) {
+  const numBins = fftSize / 2;
+  const lowMel = hzToMel(lowHz);
+  const highMel = hzToMel(highHz);
+  const melPoints = new Float32Array(numFilters + 2);
+  for (let i = 0; i < numFilters + 2; i++) {
+    melPoints[i] = melToHz(lowMel + (i / (numFilters + 1)) * (highMel - lowMel));
+  }
+
+  const binPoints = new Int32Array(numFilters + 2);
+  for (let i = 0; i < numFilters + 2; i++) {
+    binPoints[i] = Math.floor((fftSize + 1) * melPoints[i] / sampleRate);
+  }
+
+  const filters = [];
+  for (let m = 1; m <= numFilters; m++) {
+    const filter = new Float32Array(numBins);
+    const prev = binPoints[m - 1], curr = binPoints[m], next = binPoints[m + 1];
+    for (let k = prev; k < curr; k++) filter[k] = (k - prev) / (curr - prev);
+    for (let k = curr; k < next; k++) filter[k] = (next - k) / (next - curr);
+    filters.push(filter);
+  }
+  return filters;
+}
+
+// In-place Radix-2 FFT
+function fft(real, imag) {
+  const n = real.length;
+  for (let i = 0, j = 0; i < n; i++) {
+    if (j > i) {
+      let tr = real[i]; real[i] = real[j]; real[j] = tr;
+      let ti = imag[i]; imag[i] = imag[j]; imag[j] = ti;
+    }
+    let m = n >> 1;
+    while (m >= 1 && j >= m) { j -= m; m >>= 1; }
+    j += m;
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const half = len >> 1;
+    const angle = (-2 * Math.PI) / len;
+    const wStepR = Math.cos(angle), wStepI = Math.sin(angle);
+    for (let i = 0; i < n; i += len) {
+      let wr = 1, wi = 0;
+      for (let k = 0; k < half; k++) {
+        const uR = real[i + k], uI = imag[i + k];
+        const vR = real[i + k + half] * wr - imag[i + k + half] * wi;
+        const vI = real[i + k + half] * wi + imag[i + k + half] * wr;
+        real[i + k] = uR + vR; imag[i + k] = uI + vI;
+        real[i + k + half] = uR - vR; imag[i + k + half] = uI - vI;
+        const nwR = wr * wStepR - wi * wStepI;
+        wi = wr * wStepI + wi * wStepR;
+        wr = nwR;
+      }
+    }
+  }
+}
+
+// Linear resample PCM buffer to TARGET_SR (16kHz)
+function resampleTo16k(input, originalSR) {
+  if (originalSR === TARGET_SR) return input;
+  const ratio = originalSR / TARGET_SR;
+  const newLen = Math.floor(input.length / ratio);
+  const output = new Float32Array(newLen);
+  for (let i = 0; i < newLen; i++) {
+    const srcIdx = i * ratio;
+    const i0 = Math.floor(srcIdx);
+    const i1 = Math.min(i0 + 1, input.length - 1);
+    const frac = srcIdx - i0;
+    output[i] = input[i0] * (1 - frac) + input[i1] * frac;
+  }
+  return output;
+}
+
+// Extract 24-band Mel Spectrogram matrix from 16kHz PCM data
+function computeMelSpectrogram(pcm16k) {
+  const numFrames = Math.floor((pcm16k.length - FFT_SIZE) / HOP_SIZE);
+  if (numFrames <= 0) return [];
+
+  const real = new Float32Array(FFT_SIZE);
+  const imag = new Float32Array(FFT_SIZE);
+  const power = new Float32Array(FFT_SIZE / 2);
+  const frames = [];
+
+  for (let f = 0; f < numFrames; f++) {
+    const offset = f * HOP_SIZE;
+    for (let i = 0; i < FFT_SIZE; i++) {
+      real[i] = pcm16k[offset + i] * hann[i];
+      imag[i] = 0;
+    }
+    fft(real, imag);
+
+    for (let k = 0; k < FFT_SIZE / 2; k++) {
+      power[k] = (real[k] * real[k] + imag[k] * imag[k]) / FFT_SIZE;
+    }
+
+    const melFrame = new Float32Array(NUM_MEL_BINS);
+    for (let m = 0; m < NUM_MEL_BINS; m++) {
+      const filter = melFilters[m];
+      let energy = 0;
+      for (let k = 0; k < FFT_SIZE / 2; k++) energy += power[k] * filter[k];
+      melFrame[m] = Math.log10(1 + 100 * energy);
+    }
+    frames.push(melFrame);
+  }
+
+  // Trim silence from start and end
+  let start = 0;
+  while (start < frames.length && frameSum(frames[start]) < 0.08) start++;
+  let end = frames.length - 1;
+  while (end > start && frameSum(frames[end]) < 0.08) end--;
+
+  return frames.slice(start, end + 1);
+}
+
+function frameSum(arr) {
+  let s = 0;
+  for (let i = 0; i < arr.length; i++) s += arr[i];
+  return s;
+}
+
+// Precision Normalized 2D Cosine Correlation
+function matchTemplate(liveFrames, template) {
+  const tLen = template.length;
+  const lLen = liveFrames.length;
+  if (lLen < tLen) return 0;
+
+  let bestScore = 0;
+  const maxSlide = Math.min(lLen - tLen, 30);
+
+  // Compute template Frobenius norm
+  let normB = 0;
+  for (let t = 0; t < tLen; t++) {
+    for (let b = 0; b < NUM_MEL_BINS; b++) {
+      const val = template[t][b];
+      normB += val * val;
+    }
+  }
+  normB = Math.sqrt(normB);
+  if (normB < 0.001) return 0;
+
+  for (let s = 0; s <= maxSlide; s++) {
+    const startIdx = lLen - tLen - s;
+    let dot = 0, normA = 0;
+
+    for (let t = 0; t < tLen; t++) {
+      const a = liveFrames[startIdx + t];
+      const b = template[t];
+      for (let k = 0; k < NUM_MEL_BINS; k++) {
+        dot += a[k] * b[k];
+        normA += a[k] * a[k];
+      }
+    }
+
+    normA = Math.sqrt(normA);
+    if (normA > 0.001) {
+      const sim = dot / (normA * normB);
+      if (sim > bestScore) bestScore = sim;
+    }
+  }
+
+  return bestScore;
+}
+
+// Multi-Proxy CORS loader
+async function fetchAudio(url) {
+  const proxies = [
+    url,
+    `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  ];
+  for (const p of proxies) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 6000);
+      const res = await fetch(p, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) return await res.arrayBuffer();
+    } catch (e) {}
+  }
+  throw new Error(`Failed: ${url}`);
+}
+
+async function loadAllSamples() {
+  const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const progressBar = document.getElementById('loadProgress');
+  const countEl = document.getElementById('sampleCount');
+  let loaded = 0;
+
+  for (let i = 0; i < SOUND_URLS.length; i += 4) {
+    const batch = SOUND_URLS.slice(i, i + 4);
+    await Promise.all(batch.map(async (url) => {
+      const id = url.split('/').pop().replace(/\.[^/.]+$/, "");
+      try {
+        const arrayBuf = await fetchAudio(url);
+        const audioBuf = await tempCtx.decodeAudioData(arrayBuf);
+        const pcm16k = resampleTo16k(audioBuf.getChannelData(0), audioBuf.sampleRate);
+        const matrix = computeMelSpectrogram(pcm16k);
+        fingerprintDB.push({ id, url, buffer: audioBuf, matrix });
+      } catch (e) {
+        console.warn(`Error on ${id}:`, e);
+      } finally {
+        loaded++;
+        progressBar.style.width = Math.round((loaded / SOUND_URLS.length) * 100) + '%';
+        countEl.textContent = `${fingerprintDB.length} / ${SOUND_URLS.length} Loaded`;
+      }
+    }));
+    renderSampleList();
+  }
+
+  document.getElementById('engineStatus').textContent = 'READY';
+  tempCtx.close();
+}
+
+// --- Realtime Continuous Stream Processing ---
+async function startListening(type) {
+  try {
+    if (audioCtx) await audioCtx.close();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    if (type === 'system') {
+      mediaStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+    } else {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false }
+      });
+    }
+
+    const audioTrack = mediaStream.getAudioTracks()[0];
+    if (!audioTrack) {
+      alert("No audio track detected! Make sure you check 'Share audio' in the prompt.");
+      stopListening();
+      return;
+    }
+
+    const source = audioCtx.createMediaStreamSource(mediaStream);
+    
+    // Continuous ScriptProcessorNode ensures 0 dropped audio samples
+    processorNode = audioCtx.createScriptProcessor(2048, 1, 1);
+    pcmResampleAccumulator = [];
+    rollingMelFrames = [];
+
+    processorNode.onaudioprocess = (e) => {
+      if (!isListening) return;
+      const rawInput = e.inputBuffer.getChannelData(0);
+      handleIncomingAudio(rawInput, audioCtx.sampleRate);
+    };
+
+    source.connect(processorNode);
+    processorNode.connect(audioCtx.destination);
+
+    isListening = true;
+    updateUI(true);
+  } catch (err) {
+    alert("Audio Error: " + err.message);
+    stopListening();
+  }
+}
+
+function stopListening() {
+  if (processorNode) { processorNode.disconnect(); processorNode = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  isListening = false;
+  document.getElementById('inputMeter').style.width = '0%';
+  updateUI(false);
+}
+
+// Process incoming raw audio chunks through 16kHz Mel pipeline
+function handleIncomingAudio(rawChunk, sampleRate) {
+  // Update visual meter
+  let peak = 0;
+  for (let i = 0; i < rawChunk.length; i++) {
+    const abs = Math.abs(rawChunk[i]);
+    if (abs > peak) peak = abs;
+  }
+  document.getElementById('inputMeter').style.width = Math.min(100, peak * 250) + '%';
+
+  // Resample chunk to 16kHz and append to continuous accumulator
+  const chunk16k = resampleTo16k(rawChunk, sampleRate);
+  for (let i = 0; i < chunk16k.length; i++) pcmResampleAccumulator.push(chunk16k[i]);
+
+  // Extract Mel frames whenever we have enough samples
+  const real = new Float32Array(FFT_SIZE);
+  const imag = new Float32Array(FFT_SIZE);
+  const power = new Float32Array(FFT_SIZE / 2);
+
+  while (pcmResampleAccumulator.length >= FFT_SIZE) {
+    for (let i = 0; i < FFT_SIZE; i++) {
+      real[i] = pcmResampleAccumulator[i] * hann[i];
+      imag[i] = 0;
+    }
+    fft(real, imag);
+
+    for (let k = 0; k < FFT_SIZE / 2; k++) {
+      power[k] = (real[k] * real[k] + imag[k] * imag[k]) / FFT_SIZE;
+    }
+
+    const melFrame = new Float32Array(NUM_MEL_BINS);
+    for (let m = 0; m < NUM_MEL_BINS; m++) {
+      const filter = melFilters[m];
+      let energy = 0;
+      for (let k = 0; k < FFT_SIZE / 2; k++) energy += power[k] * filter[k];
+      melFrame[m] = Math.log10(1 + 100 * energy);
+    }
+
+    rollingMelFrames.push(melFrame);
+    if (rollingMelFrames.length > LIVE_BUFFER_FRAMES) rollingMelFrames.shift();
+
+    // Advance by HOP_SIZE (160 samples = 10ms)
+    pcmResampleAccumulator.splice(0, HOP_SIZE);
+  }
+
+  // Run matching if recent frame contains actual audio
+  if (peak > 0.03 && rollingMelFrames.length >= 25) {
+    runMatcher();
+  }
+}
+
+function runMatcher() {
+  const scores = [];
+  for (const sample of fingerprintDB) {
+    const score = matchTemplate(rollingMelFrames, sample.matrix);
+    scores.push({ id: sample.id, score });
+  }
+
+  scores.sort((a, b) => b.score - a.score);
+  updateTopRankingUI(scores.slice(0, 4));
+
+  const threshold = parseFloat(document.getElementById('threshRange').value) / 100;
+  const top = scores[0];
+  const now = Date.now();
+
+  if (top && top.score >= threshold && now - lastMatchTime > MATCH_COOLDOWN_MS) {
+    triggerMatch(top.id, top.score);
+    lastMatchTime = now;
+  }
+}
+
+function updateTopRankingUI(top4) {
+  const container = document.getElementById('liveRanking');
+  container.innerHTML = top4.map((c, i) => `
+    <div class="rank-row ${i === 0 ? 'top-1' : ''}">
+      <span class="name">#${i + 1} ${c.id}</span>
+      <span class="score">${(c.score * 100).toFixed(1)}%</span>
+    </div>
+  `).join('');
+}
+
+function triggerMatch(id, score) {
+  const banner = document.getElementById('matchBanner');
+  document.getElementById('matchedId').textContent = id;
+  document.getElementById('matchedDetails').textContent = `Confidence: ${(score * 100).toFixed(1)}%`;
+  banner.classList.add('active');
+  setTimeout(() => banner.classList.remove('active'), 1200);
+}
+
+function updateUI(active) {
+  document.getElementById('startSystemBtn').disabled = active;
+  document.getElementById('startMicBtn').disabled = active;
+  document.getElementById('stopBtn').disabled = !active;
+  const status = document.getElementById('engineStatus');
+  status.textContent = active ? 'LISTENING' : (fingerprintDB.length ? 'READY' : 'LOADING');
+  status.className = active ? 'badge active' : 'badge';
+}
+
+function renderSampleList(filter = '') {
+  const list = document.getElementById('sampleList');
+  list.innerHTML = '';
+  const filtered = fingerprintDB.filter(s => s.id.toLowerCase().includes(filter.toLowerCase()));
+
+  filtered.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'sample-item';
+    el.innerHTML = `
+      <div class="id" title="${item.id}">${item.id}</div>
+      <div style="display:flex; gap:4px;">
+        <button class="secondary" style="padding:2px 7px; font-size:0.75rem;" onclick="testPipelineDirectly('${item.id}')" title="Test directly inside engine">Direct Test</button>
+        <button class="secondary" style="padding:2px 7px; font-size:0.75rem;" onclick="playAudio('${item.id}')" title="Play sound">&#9654;</button>
+      </div>
+    `;
+    list.appendChild(el);
+  });
+}
+
+// Play sound through speakers
+window.playAudio = function(id) {
+  const sample = fingerprintDB.find(s => s.id === id);
+  if (!sample || !sample.buffer) return;
+  const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createBufferSource();
+  src.buffer = sample.buffer;
+  src.connect(ctx.destination);
+  src.start();
+};
+
+// Directly inject sound into engine to test recognition accuracy instantly
+window.testPipelineDirectly = function(id) {
+  const sample = fingerprintDB.find(s => s.id === id);
+  if (!sample || !sample.buffer) return;
+  const pcm = sample.buffer.getChannelData(0);
+  rollingMelFrames = [];
+  pcmResampleAccumulator = [];
+  handleIncomingAudio(pcm, sample.buffer.sampleRate);
+  runMatcher();
+};
+
+// Listeners
+document.getElementById('startSystemBtn').addEventListener('click', () => startListening('system'));
+document.getElementById('startMicBtn').addEventListener('click', () => startListening('mic'));
+document.getElementById('stopBtn').addEventListener('click', stopListening);
+document.getElementById('searchBox').addEventListener('input', (e) => renderSampleList(e.target.value));
+document.getElementById('threshRange').addEventListener('input', (e) => {
+  document.getElementById('threshVal').textContent = (e.target.value / 100).toFixed(2);
+});
+
+loadAllSamples();
+</script>
+</body>
+</html>
